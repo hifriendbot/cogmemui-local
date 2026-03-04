@@ -8,7 +8,7 @@ const { load, resetToken, CONFIG_FILE } = require('../src/config');
 
 const PKG_DIR = path.resolve(__dirname, '..');
 const PID_FILE = path.join(os.homedir(), '.cogmemui-local', 'server.pid');
-const VERSION = '1.1.6';
+const VERSION = '1.1.7';
 
 // Parse CLI args.
 const args = process.argv.slice(2);

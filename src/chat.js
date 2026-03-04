@@ -13,6 +13,10 @@ const os = require('os');
 // Session map: conversationId -> { sessionId, lastUsed }
 const sessions = new Map();
 
+// Concurrency limit for Claude CLI processes.
+const MAX_CONCURRENT_CHATS = 3;
+let activeChatCount = 0;
+
 // Claude CLI detection result (set at startup).
 let claudeStatus = { available: false, version: null };
 let claudePath = 'claude'; // Resolved full path for shell-free spawn.
@@ -66,6 +70,14 @@ function getStatus() {
  * @param {object} config
  */
 function handleChat(req, res, body, config) {
+	// Enforce concurrency limit.
+	if (activeChatCount >= MAX_CONCURRENT_CHATS) {
+		res.setHeader('Content-Type', 'application/json');
+		res.writeHead(429);
+		res.end(JSON.stringify({ error: 'Too many concurrent chat sessions. Try again shortly.' }));
+		return;
+	}
+
 	if (!claudeStatus.available) {
 		res.setHeader('Content-Type', 'application/json');
 		res.writeHead(503);
@@ -73,12 +85,14 @@ function handleChat(req, res, body, config) {
 		return;
 	}
 
-	const conversationId = String(body.conversation_id || '');
+	// Sanitize inputs to prevent injection.
+	const conversationId = String(body.conversation_id || '').replace(/[^a-zA-Z0-9_-]/g, '');
 	const message = body.message || '';
 	const systemPrompt = body.system_prompt || '';
 	const memoryContext = body.memory_context || '';
 	const history = Array.isArray(body.history) ? body.history : [];
-	const model = body.model || '';
+	// Validate model: only allow alphanumeric, hyphens, dots, colons, underscores.
+	const model = String(body.model || '').replace(/[^a-zA-Z0-9._:-]/g, '');
 	const images = Array.isArray(body.images) ? body.images : [];
 	const cogmemaiApiKey = body.cogmemai_api_key || '';
 
@@ -94,7 +108,9 @@ function handleChat(req, res, body, config) {
 	for (const img of images) {
 		if (img.data && img.media_type) {
 			try {
-				const ext = img.media_type.split('/')[1] || 'png';
+				const rawExt = String(img.media_type.split('/')[1] || 'png');
+			const allowedExts = ['png', 'jpg', 'jpeg', 'gif', 'webp', 'bmp', 'svg'];
+			const ext = allowedExts.includes(rawExt) ? rawExt : 'png';
 				const fname = 'cogmemui-' + Date.now() + '-' + Math.random().toString(36).slice(2, 8) + '.' + ext;
 				const fpath = path.join(os.tmpdir(), fname);
 				fs.writeFileSync(fpath, Buffer.from(img.data, 'base64'));
@@ -134,7 +150,7 @@ function handleChat(req, res, body, config) {
 				},
 			};
 			mcpConfigPath = path.join(os.tmpdir(), 'cogmemui-mcp-' + conversationId + '.json');
-			fs.writeFileSync(mcpConfigPath, JSON.stringify(mcpConfig));
+			fs.writeFileSync(mcpConfigPath, JSON.stringify(mcpConfig), { mode: 0o600 });
 			args.push('--mcp-config', mcpConfigPath);
 			args.push('--allowedTools', 'mcp__cogmemai__*');
 		}
@@ -201,6 +217,8 @@ function handleChat(req, res, body, config) {
 	};
 
 	const startTime = Date.now();
+
+	activeChatCount++;
 
 	// Spawn the Claude CLI process.
 	// Use stdin for the prompt to avoid cmd.exe mangling angle brackets and special chars.
@@ -270,6 +288,7 @@ function handleChat(req, res, body, config) {
 
 	// Handle process exit.
 	child.on('close', (code) => {
+		activeChatCount = Math.max(0, activeChatCount - 1);
 		childExited = true;
 		clearTimeout(timeout);
 		clearInterval(keepalive);

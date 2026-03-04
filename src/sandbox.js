@@ -54,8 +54,10 @@ function validatePath(filePath, allowedDirs, requireExists = true) {
 function isInSandbox(resolvedPath, allowedDirs) {
 	const normalized = resolvedPath.replace(/\\/g, '/').toLowerCase();
 	return allowedDirs.some(dir => {
-		const normalizedDir = dir.replace(/\\/g, '/').toLowerCase();
-		return normalized.startsWith(normalizedDir);
+		// Ensure directory ends with separator so /home/user doesn't match /home/username.
+		let normalizedDir = dir.replace(/\\/g, '/').toLowerCase();
+		if (!normalizedDir.endsWith('/')) normalizedDir += '/';
+		return normalized === normalizedDir.slice(0, -1) || normalized.startsWith(normalizedDir);
 	});
 }
 

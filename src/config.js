@@ -45,7 +45,7 @@ function save(config) {
 		if (!fs.existsSync(CONFIG_DIR)) {
 			fs.mkdirSync(CONFIG_DIR, { recursive: true });
 		}
-		fs.writeFileSync(CONFIG_FILE, JSON.stringify(config, null, 2), 'utf8');
+		fs.writeFileSync(CONFIG_FILE, JSON.stringify(config, null, 2), { encoding: 'utf8', mode: 0o600 });
 	} catch (e) {
 		console.error('Warning: Could not save config:', e.message);
 	}

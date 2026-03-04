@@ -5,16 +5,15 @@
 function handleCors(req, res, allowedOrigins) {
 	const origin = req.headers['origin'] || '';
 
-	// Check if origin is in allowed list.
-	const allowed = allowedOrigins.some(o => o === origin || o === '*');
+	// Check if origin is in allowed list (no wildcard — must match exactly).
+	const allowed = origin && allowedOrigins.some(o => o === origin);
 
 	if (allowed) {
 		res.setHeader('Access-Control-Allow-Origin', origin);
+		res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+		res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+		res.setHeader('Access-Control-Max-Age', '86400');
 	}
-
-	res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
-	res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
-	res.setHeader('Access-Control-Max-Age', '86400');
 
 	// Handle preflight.
 	if (req.method === 'OPTIONS') {

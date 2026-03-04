@@ -2,6 +2,8 @@
  * Bearer token authentication middleware.
  */
 
+const crypto = require('crypto');
+
 function validateAuth(req, token) {
 	const header = req.headers['authorization'] || '';
 	if (!header.startsWith('Bearer ')) {
@@ -11,15 +13,10 @@ function validateAuth(req, token) {
 	if (!provided || !token) {
 		return false;
 	}
-	// Constant-time comparison to prevent timing attacks.
-	if (provided.length !== token.length) {
-		return false;
-	}
-	let mismatch = 0;
-	for (let i = 0; i < provided.length; i++) {
-		mismatch |= provided.charCodeAt(i) ^ token.charCodeAt(i);
-	}
-	return mismatch === 0;
+	// Use SHA-256 hash comparison to avoid length leaks and ensure constant time.
+	const a = crypto.createHash('sha256').update(provided).digest();
+	const b = crypto.createHash('sha256').update(token).digest();
+	return crypto.timingSafeEqual(a, b);
 }
 
 module.exports = { validateAuth };

@@ -1,4 +1,7 @@
-const { execFile, exec } = require('child_process');
+const { execFile } = require('child_process');
+
+// Shell metacharacters that indicate injection attempts.
+const SHELL_META = /[;|&`$(){}><!\n\r]/;
 
 function execute(input, config) {
 	if (!config.shell_enabled) {
@@ -11,10 +14,22 @@ function execute(input, config) {
 	const { command } = input;
 	if (!command) return { content: 'The command parameter is required.', is_error: true };
 
+	// Parse command into executable + arguments.
+	const parts = command.trim().split(/\s+/);
+	const cmdBase = parts[0];
+	const cmdArgs = parts.slice(1);
+
+	// Reject shell metacharacters in the full command.
+	if (SHELL_META.test(command)) {
+		return {
+			content: 'Command contains disallowed shell metacharacters. Use simple commands only (no pipes, redirects, or chaining).',
+			is_error: true,
+		};
+	}
+
 	// Validate against whitelist.
 	const whitelist = config.command_whitelist || [];
 	if (whitelist.length > 0) {
-		const cmdBase = command.trim().split(/\s+/)[0];
 		// Also check basename for full paths.
 		const cmdName = cmdBase.replace(/^.*[\\/]/, '').replace(/\.exe$/i, '');
 		const allowed = whitelist.some(w => w === cmdBase || w === cmdName);
@@ -28,7 +43,8 @@ function execute(input, config) {
 
 	return new Promise((resolve) => {
 		const timeout = 30000; // 30s
-		const child = exec(command, {
+		// Use execFile (no shell) to prevent metacharacter interpretation.
+		const child = execFile(cmdBase, cmdArgs, {
 			timeout,
 			cwd: process.cwd(),
 			maxBuffer: 1024 * 1024, // 1MB

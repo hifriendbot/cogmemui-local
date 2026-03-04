@@ -25,7 +25,7 @@ function createServer(config) {
 				const chatStatus = chat.getStatus();
 				return sendJson(res, 200, {
 					status: 'ok',
-					version: '1.1.6',
+					version: '1.1.7',
 					tools: tools.getDefinitions().length,
 					hostname: require('os').hostname(),
 					platform: process.platform,
@@ -81,19 +81,19 @@ function createServer(config) {
 				if (!config.shell_enabled) {
 					return sendJson(res, 403, { error: 'Shell execution is disabled in config.' });
 				}
-				const { exec } = require('child_process');
+				const { execFile } = require('child_process');
 				const cmd = lang === 'python3' ? 'python3' : 'bash';
 				const timestamp = new Date().toISOString();
 				console.log('[' + timestamp + '] run (' + cmd + ') ' + code.substring(0, 60));
-				const child = exec(cmd, { timeout: 10000, maxBuffer: 512 * 1024, windowsHide: true }, (error, stdout, stderr) => {
+				// Use execFile with ['-c', code] / ['-'] to avoid shell metacharacter interpretation.
+				const cmdArgs = lang === 'python3' ? ['-c', code] : ['-c', code];
+				const child = execFile(cmd, cmdArgs, { timeout: 10000, maxBuffer: 512 * 1024, windowsHide: true }, (error, stdout, stderr) => {
 					sendJson(res, 200, {
 						stdout: stdout || '',
 						stderr: stderr || '',
 						exitCode: error ? (error.code || 1) : 0,
 					});
 				});
-				child.stdin.write(code);
-				child.stdin.end();
 				return;
 			}
 
@@ -101,7 +101,7 @@ function createServer(config) {
 			sendJson(res, 404, { error: 'Not found' });
 		} catch (e) {
 			console.error('Server error:', e.message);
-			sendJson(res, 500, { error: 'Internal server error: ' + e.message });
+			sendJson(res, 500, { error: 'Internal server error' });
 		}
 	});
 
@@ -117,9 +117,13 @@ function sendJson(res, status, data) {
 function readBody(req) {
 	return new Promise((resolve, reject) => {
 		let data = '';
+		let rejected = false;
 		req.on('data', chunk => {
+			if (rejected) return;
 			data += chunk;
 			if (data.length > 5 * 1024 * 1024) {
+				rejected = true;
+				req.destroy();
 				reject(new Error('Request body too large'));
 			}
 		});
