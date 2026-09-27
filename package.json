@@ -1,6 +1,6 @@
 {
   "name": "cogmemui-local",
-  "version": "1.1.12",
+  "version": "1.1.13",
   "description": "CogmemUI Local Companion: run Claude Code from the CogmemUI web interface with CogmemAi persistent memory",
   "bin": {
     "cogmemui-local": "bin/cogmemui-local.js"
@@ -20,7 +20,7 @@
     "filesystem"
   ],
   "dependencies": {
-    "cogmemai-mcp": "^3.28.0"
+    "cogmemai-mcp": "^3.28.1"
   },
   "author": "HiFriendbot",
   "license": "MIT"
